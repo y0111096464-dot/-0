@@ -15,9 +15,9 @@
         }
         .glass { background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(12px); }
         .admin-gradient { background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); }
-        /* تحسين مظهر التمرير على الجوال */
         ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
     </style>
 </head>
 <body class="text-slate-900 overflow-x-hidden">
@@ -83,28 +83,23 @@
 
         <!-- Dashboard -->
         <section id="dashboardSection" class="space-y-6 hidden">
-            <!-- Tabs (Mobile Optimized) -->
             <div id="adminTabs" class="flex bg-slate-200 p-1 rounded-2xl w-full md:w-fit mx-auto hidden">
                 <button onclick="switchTab('my-files')" id="tabMyFiles" class="flex-1 md:flex-none px-6 py-2.5 rounded-xl font-bold text-sm transition-all bg-white shadow text-blue-600">ملفاتي</button>
                 <button onclick="switchTab('admin')" id="tabAdmin" class="flex-1 md:flex-none px-6 py-2.5 rounded-xl font-bold text-sm transition-all text-slate-500">الإدارة</button>
             </div>
 
-            <!-- Content -->
             <div id="myFilesContent" class="space-y-6">
-                <!-- Upload Card -->
                 <div class="bg-white p-5 md:p-8 rounded-[2rem] shadow-sm border border-slate-100">
                     <div class="flex items-center justify-between mb-6">
                         <h3 class="font-black text-slate-800 flex items-center gap-2">
                             <i class="fas fa-plus-circle text-blue-500"></i> إضافة محتوى
                         </h3>
-                        <!-- System File Picker Button -->
-                        <button onclick="document.getElementById('systemFile').click()" class="text-xs font-bold bg-blue-50 text-blue-600 px-3 py-2 rounded-lg hover:bg-blue-100">
+                        <button onclick="document.getElementById('systemFile').click()" class="text-xs font-bold bg-blue-50 text-blue-600 px-3 py-2 rounded-lg hover:bg-blue-100 transition-colors">
                             <i class="fas fa-paperclip ml-1"></i> اختر من الجهاز
                         </button>
                         <input type="file" id="systemFile" class="hidden" onchange="handleFileSelect(event)">
                     </div>
                     
-                    <!-- File Type Selector (Scrollable on Mobile) -->
                     <div class="flex overflow-x-auto pb-2 gap-3 no-scrollbar">
                         <button onclick="setFileType('text')" class="file-type-btn flex-shrink-0 px-4 py-3 rounded-xl border-2 border-blue-500 bg-blue-50 flex items-center gap-2" data-type="text">
                             <i class="fas fa-file-alt text-slate-500"></i><span class="text-xs font-bold">نص</span>
@@ -127,13 +122,9 @@
                     </div>
                 </div>
 
-                <!-- Grid -->
-                <div id="filesGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    <!-- Files -->
-                </div>
+                <div id="filesGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"></div>
             </div>
 
-            <!-- Admin -->
             <div id="adminContent" class="admin-gradient text-white rounded-[2rem] p-5 md:p-8 shadow-2xl hidden overflow-hidden">
                 <h3 class="text-xl font-black mb-6">السجل العالمي</h3>
                 <div class="overflow-x-auto -mx-5 md:mx-0">
@@ -145,8 +136,7 @@
                                 <th class="p-4 text-left">التاريخ</th>
                             </tr>
                         </thead>
-                        <tbody id="adminTableBody" class="divide-y divide-slate-800">
-                        </tbody>
+                        <tbody id="adminTableBody" class="divide-y divide-slate-800"></tbody>
                     </table>
                 </div>
             </div>
@@ -172,8 +162,9 @@
 
         // UI Handlers
         window.showOtp = () => {
-            currentEmail = document.getElementById('loginEmail').value;
-            if(!currentEmail.includes('@')) return alert('البريد غير صحيح');
+            const emailInput = document.getElementById('loginEmail').value;
+            if(!emailInput.includes('@')) return alert('يرجى إدخال بريد إلكتروني صحيح');
+            currentEmail = emailInput;
             localStorage.setItem('cloud_email', currentEmail);
             document.getElementById('loginSection').classList.add('hidden');
             document.getElementById('otpSection').classList.remove('hidden');
@@ -181,8 +172,10 @@
 
         window.handleLogin = async () => {
             if(document.getElementById('otpCode').value !== '123456') {
-                return document.getElementById('otpError').classList.remove('hidden');
+                document.getElementById('otpError').classList.remove('hidden');
+                return;
             }
+            
             document.getElementById('loadingOverlay').classList.remove('hidden');
             try {
                 if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
@@ -190,13 +183,20 @@
                 } else {
                     await signInAnonymously(auth);
                 }
-            } catch (e) { alert('خطأ في الاتصال'); }
-            document.getElementById('loadingOverlay').classList.add('hidden');
+            } catch (e) { 
+                console.error("Auth Error:", e);
+                alert('خطأ في الاتصال بالخادم'); 
+            } finally {
+                document.getElementById('loadingOverlay').classList.add('hidden');
+            }
         };
 
         window.handleLogout = () => {
-            unsubs.forEach(u => u());
-            signOut(auth);
+            unsubs.forEach(u => typeof u === 'function' && u());
+            unsubs = [];
+            signOut(auth).then(() => {
+                location.reload(); // إعادة التحميل لضمان تنظيف الحالة
+            });
         };
 
         window.setFileType = (type) => {
@@ -207,14 +207,12 @@
             });
         };
 
-        // ميزة اختيار الملف من النظام
         window.handleFileSelect = (event) => {
             const file = event.target.files[0];
             if (!file) return;
 
             document.getElementById('fileName').value = file.name;
             
-            // تحديد النوع تلقائياً بناءً على الملف
             if (file.type.startsWith('image/')) setFileType('image');
             else if (file.type.startsWith('video/')) setFileType('video');
             else if (file.type.startsWith('audio/')) setFileType('audio');
@@ -224,34 +222,42 @@
         };
 
         window.uploadFile = async () => {
-            if(!currentUser || !document.getElementById('fileContent').value) return;
+            if(!currentUser) return alert("يجب تسجيل الدخول أولاً");
+            const content = document.getElementById('fileContent').value;
+            if(!content) return alert("يرجى إضافة محتوى");
             
             const btn = document.getElementById('uploadBtn');
             btn.disabled = true; btn.innerText = "جاري الحفظ...";
 
-            const data = {
+            const fileData = {
                 name: document.getElementById('fileName').value || "بدون عنوان",
-                content: document.getElementById('fileContent').value,
+                content: content,
                 type: currentFileType,
                 ownerEmail: currentEmail,
                 createdAt: new Date().toISOString()
             };
 
             try {
-                // حفظ خاص وحفظ عام للمدير
-                await addDoc(collection(db, 'artifacts', appId, 'users', currentUser.uid, 'files'), data);
-                await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'registry'), data);
+                // حفظ في المسار الخاص والعام
+                await addDoc(collection(db, 'artifacts', appId, 'users', currentUser.uid, 'files'), fileData);
+                await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'registry'), fileData);
                 
                 document.getElementById('fileName').value = "";
                 document.getElementById('fileContent').value = "";
-            } catch (e) { alert('عذراً، فشل الرفع'); }
-            
-            btn.disabled = false; btn.innerText = "رفع إلى السحابة";
+            } catch (e) { 
+                console.error("Upload Error:", e);
+                alert('فشل الرفع: ' + e.message); 
+            } finally {
+                btn.disabled = false; btn.innerText = "رفع إلى السحابة";
+            }
         };
 
         window.deleteFile = async (id) => {
-            if(confirm('حذف الملف؟')) {
-                await deleteDoc(doc(db, 'artifacts', appId, 'users', currentUser.uid, 'files', id));
+            if(!currentUser) return;
+            if(confirm('هل تريد حذف هذا الملف؟')) {
+                try {
+                    await deleteDoc(doc(db, 'artifacts', appId, 'users', currentUser.uid, 'files', id));
+                } catch (e) { alert("خطأ في الحذف"); }
             }
         };
 
@@ -266,54 +272,57 @@
         onAuthStateChanged(auth, (user) => {
             currentUser = user;
             if(user) {
-                document.querySelectorAll('section').forEach(s => s.classList.add('hidden'));
+                document.getElementById('loginSection').classList.add('hidden');
+                document.getElementById('otpSection').classList.add('hidden');
                 document.getElementById('dashboardSection').classList.remove('hidden');
                 document.getElementById('userInfo').classList.remove('hidden');
-                document.getElementById('userDisplayEmail').innerText = currentEmail;
+                document.getElementById('userDisplayEmail').innerText = currentEmail || "مستخدم سحابي";
                 
                 const isAdmin = currentEmail === ADMIN_EMAIL;
                 document.getElementById('userRole').innerText = isAdmin ? "المدير" : "عضو";
                 if(isAdmin) document.getElementById('adminTabs').classList.remove('hidden');
 
-                // Listeners
-                const u1 = onSnapshot(collection(db, 'artifacts', appId, 'users', user.uid, 'files'), (snap) => {
+                // بدء الاستماع للبيانات بعد التأكد من تسجيل الدخول
+                const qUser = collection(db, 'artifacts', appId, 'users', user.uid, 'files');
+                const u1 = onSnapshot(qUser, (snap) => {
                     const grid = document.getElementById('filesGrid');
                     grid.innerHTML = "";
                     snap.forEach(d => {
                         const file = d.data();
                         const icon = getIcon(file.type);
                         grid.innerHTML += `
-                            <div class="bg-white p-4 rounded-[1.5rem] border border-slate-100 shadow-sm">
+                            <div class="bg-white p-4 rounded-[1.5rem] border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
                                 <div class="flex items-center gap-3 mb-3">
                                     <div class="p-2 rounded-lg bg-slate-50 ${icon.color}">${icon.tag}</div>
-                                    <h4 class="font-bold text-sm truncate">${file.name}</h4>
+                                    <h4 class="font-bold text-sm truncate flex-1">${file.name}</h4>
                                 </div>
-                                <p class="text-xs text-slate-500 line-clamp-2 mb-4">${file.content}</p>
+                                <p class="text-xs text-slate-500 line-clamp-2 mb-4 h-8">${file.content}</p>
                                 <div class="flex justify-between items-center pt-3 border-t">
                                     <span class="text-[9px] text-slate-400 font-bold">${new Date(file.createdAt).toLocaleDateString('ar-EG')}</span>
-                                    <button onclick="deleteFile('${d.id}')" class="text-slate-300 hover:text-red-500"><i class="fas fa-trash"></i></button>
+                                    <button onclick="deleteFile('${d.id}')" class="text-slate-300 hover:text-red-500 transition-colors"><i class="fas fa-trash"></i></button>
                                 </div>
                             </div>
                         `;
                     });
-                });
+                }, (err) => console.error("Snapshot Error:", err));
                 unsubs.push(u1);
 
                 if(isAdmin) {
-                    const u2 = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'registry'), (snap) => {
+                    const qAdmin = collection(db, 'artifacts', appId, 'public', 'data', 'registry');
+                    const u2 = onSnapshot(qAdmin, (snap) => {
                         const tbody = document.getElementById('adminTableBody');
                         tbody.innerHTML = "";
                         snap.forEach(d => {
                             const f = d.data();
                             tbody.innerHTML += `
-                                <tr class="border-b border-slate-800/50">
-                                    <td class="p-4 truncate max-w-[80px]">${f.ownerEmail.split('@')[0]}</td>
-                                    <td class="p-4 font-bold">${f.name}</td>
+                                <tr class="border-b border-slate-800/50 hover:bg-white/5">
+                                    <td class="p-4 truncate max-w-[100px]">${f.ownerEmail ? f.ownerEmail.split('@')[0] : 'مجهول'}</td>
+                                    <td class="p-4 font-bold truncate max-w-[120px]">${f.name}</td>
                                     <td class="p-4 text-left text-slate-500">${new Date(f.createdAt).toLocaleDateString('ar-EG')}</td>
                                 </tr>
                             `;
                         });
-                    });
+                    }, (err) => console.error("Admin Snapshot Error:", err));
                     unsubs.push(u2);
                 }
             } else {
